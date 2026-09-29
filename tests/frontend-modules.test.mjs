@@ -79,23 +79,69 @@ async function testApiModule() {
 }
 
 
-async function testSingleCalculationRequest() {
+function createDeferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return {promise, resolve};
+}
+
+
+function createCalculatorDependencies(overrides = {}) {
+  const state = {
+    calculationErrors: [],
+    loadingStates: [],
+    results: [],
+  };
+
+  return {
+    dependencies: {
+      api: overrides.api,
+      historyController: overrides.historyController,
+      keypad: {
+        addEventListener() {},
+        contains() {
+          return true;
+        },
+      },
+      ui: {
+        showExpression() {},
+        resetResult() {},
+        showResult(result) {
+          state.results.push(result);
+        },
+        showResultError(message) {
+          state.calculationErrors.push(message);
+        },
+        setCalculationLoading(isLoading) {
+          state.loadingStates.push(isLoading);
+        },
+      },
+    },
+    state,
+  };
+}
+
+
+async function testPendingCalculationPreventsDuplicateRequest() {
   const {CalculatorController} = await loadModule(
     'src/js/calculator.js',
   );
-  let resolveCalculation;
+  const firstCalculation = createDeferred();
   let calculationRequests = 0;
   let keypadListeners = 0;
   let historyRequests = 0;
-  const resultValues = [];
 
   const controller = new CalculatorController({
     api: {
       calculate: async () => {
         calculationRequests += 1;
-        return new Promise((resolve) => {
-          resolveCalculation = resolve;
-        });
+        if (calculationRequests === 1) {
+          return firstCalculation.promise;
+        }
+        return {result: 5};
       },
     },
     historyController: {
@@ -114,9 +160,7 @@ async function testSingleCalculationRequest() {
     ui: {
       showExpression() {},
       resetResult() {},
-      showResult(result) {
-        resultValues.push(result);
-      },
+      showResult() {},
       showResultError() {},
       setCalculationLoading() {},
     },
@@ -131,11 +175,118 @@ async function testSingleCalculationRequest() {
   const duplicateRequest = controller.requestCalculation();
 
   assert.equal(calculationRequests, 1);
-  resolveCalculation({result: 61});
+  assert.equal(controller.isRequesting, true);
+  firstCalculation.resolve({result: 61});
   await Promise.all([firstRequest, duplicateRequest]);
 
-  assert.deepEqual(resultValues, [61]);
+  assert.equal(controller.isRequesting, false);
   assert.equal(historyRequests, 1);
+
+  controller.expression = '2+3';
+  await controller.requestCalculation();
+  assert.equal(calculationRequests, 2);
+}
+
+
+async function testCalculationLoadingDoesNotWaitForHistory() {
+  const {CalculatorController} = await loadModule(
+    'src/js/calculator.js',
+  );
+  const historyRefresh = createDeferred();
+  let historyStarted = false;
+  let historyFinished = false;
+  const {dependencies, state} = createCalculatorDependencies({
+    api: {
+      calculate: async () => ({result: 7.9}),
+    },
+    historyController: {
+      refresh: async () => {
+        historyStarted = true;
+        await historyRefresh.promise;
+        historyFinished = true;
+      },
+    },
+  });
+  const controller = new CalculatorController(dependencies);
+
+  controller.expression = '2.3+5.6';
+  await controller.requestCalculation();
+
+  assert.deepEqual(state.results, [7.9]);
+  assert.deepEqual(state.loadingStates, [true, false]);
+  assert.equal(controller.isRequesting, false);
+  assert.equal(historyStarted, true);
+  assert.equal(historyFinished, false);
+
+  historyRefresh.resolve();
+  await historyRefresh.promise;
+}
+
+
+async function testHistoryFailureDoesNotReplaceCalculationResult() {
+  const {CalculatorController} = await loadModule(
+    'src/js/calculator.js',
+  );
+  const {HistoryController} = await loadModule('src/js/history.js');
+  const historyErrors = [];
+  const historyController = new HistoryController({
+    api: {
+      getHistory: async () => {
+        throw new Error('History unavailable');
+      },
+    },
+    ui: {
+      showHistoryLoading() {},
+      showHistoryError(message) {
+        historyErrors.push(message);
+      },
+      renderHistory() {},
+    },
+  });
+  const {dependencies, state} = createCalculatorDependencies({
+    api: {
+      calculate: async () => ({result: 3}),
+    },
+    historyController,
+  });
+  const controller = new CalculatorController(dependencies);
+
+  controller.expression = '1+2';
+  await controller.requestCalculation();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(state.results, [3]);
+  assert.deepEqual(state.calculationErrors, []);
+  assert.deepEqual(historyErrors, ['History unavailable']);
+}
+
+
+async function testCalculationFailureRemainsCalculatorError() {
+  const {CalculatorController} = await loadModule(
+    'src/js/calculator.js',
+  );
+  let historyRequests = 0;
+  const {dependencies, state} = createCalculatorDependencies({
+    api: {
+      calculate: async () => {
+        throw new Error('Division by zero');
+      },
+    },
+    historyController: {
+      refresh: async () => {
+        historyRequests += 1;
+      },
+    },
+  });
+  const controller = new CalculatorController(dependencies);
+
+  controller.expression = '10/0';
+  await controller.requestCalculation();
+
+  assert.deepEqual(state.results, []);
+  assert.deepEqual(state.calculationErrors, ['Division by zero']);
+  assert.deepEqual(state.loadingStates, [true, false]);
+  assert.equal(historyRequests, 0);
 }
 
 
@@ -181,7 +332,10 @@ async function testHistoryRequestCounts() {
 
 await testApiConfiguration();
 await testApiModule();
-await testSingleCalculationRequest();
+await testPendingCalculationPreventsDuplicateRequest();
+await testCalculationLoadingDoesNotWaitForHistory();
+await testHistoryFailureDoesNotReplaceCalculationResult();
+await testCalculationFailureRemainsCalculatorError();
 await testHistoryRequestCounts();
 
-console.log('Frontend module tests: 4 passed, 0 failed');
+console.log('Frontend module tests: 7 passed, 0 failed');

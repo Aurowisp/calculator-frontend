@@ -220,7 +220,75 @@ async function run() {
       'Successful calculation should make one history GET',
     );
 
+    await client.evaluate(`(() => {
+      globalThis.__phaseOriginalFetch = globalThis.fetch;
+      globalThis.fetch = async (...args) => {
+        const response = await globalThis.__phaseOriginalFetch(...args);
+        const [resource, options = {}] = args;
+        const method = (options.method || 'GET').toUpperCase();
+        if (
+          method === 'GET'
+          && String(resource).endsWith('/api/history')
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+        return response;
+      };
+    })()`);
+
+    client.requests.length = 0;
+    await clickExpression(client, '2.3+5.6');
+    await client.waitFor(
+      `document.querySelector('#result-display').textContent === '7.9'`,
+      'decimal precision result',
+    );
+    assert.equal(
+      await client.evaluate(
+        `document.querySelector('[data-action="calculate"]').disabled`,
+      ),
+      false,
+      'Calculate button should not wait for History',
+    );
+    assert.equal(
+      await client.evaluate(
+        `document.querySelector('.history__empty')?.textContent
+          === '正在加载历史记录…'`,
+      ),
+      true,
+      'History should retain its independent loading state',
+    );
+    await client.waitFor(
+      `[...document.querySelectorAll('.history__expression')]
+        .some((item) => item.textContent === '2.3+5.6')`,
+      'decimal precision history',
+    );
+    await client.evaluate(`(() => {
+      globalThis.fetch = globalThis.__phaseOriginalFetch;
+      delete globalThis.__phaseOriginalFetch;
+    })()`);
+    assert.equal(
+      countRequests(
+        client.requests,
+        'POST',
+        `${BACKEND_URL}/api/calculate`,
+      ),
+      1,
+      'Decimal calculation should make one POST',
+    );
+    assert.equal(
+      countRequests(
+        client.requests,
+        'GET',
+        `${BACKEND_URL}/api/history`,
+      ),
+      1,
+      'Decimal calculation should make one history GET',
+    );
+
     const regressionCases = [
+      {expression: '0.1+0.2', result: '0.3'},
+      {expression: '1.2-1.1', result: '0.1'},
+      {expression: '0.1*0.2', result: '0.02'},
       {expression: '1+2', result: '3'},
       {expression: '1+2*3', result: '7'},
       {expression: '(1+2)*3', result: '9'},

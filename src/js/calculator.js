@@ -71,7 +71,7 @@ export class CalculatorController {
       }
 
       this.ui.showResult(response.result);
-      await this.historyController.refresh();
+      void this.historyController.refresh();
     } catch (error) {
       this.ui.showResultError(error.message || '计算服务不可用');
     } finally {

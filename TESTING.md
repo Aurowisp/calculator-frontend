@@ -15,7 +15,7 @@ Frontend 和 Backend 始终作为两个独立项目运行，通过 HTTP/JSON 通
 
 ## 2. Backend 自动测试
 
-最终结果：`82 passed, 0 failed, 0 errors, 1 warning`。
+最终结果：`93 passed, 0 failed, 0 errors, 1 warning`。
 
 该 warning 是 FastAPI 测试客户端触发的上游 `StarletteDeprecationWarning`，不影响应用行为。
 
@@ -32,6 +32,7 @@ python -m pytest
 
 - 四则运算、优先级、左结合
 - 括号、嵌套括号、小数、一元正负号
+- Decimal 精确运算与最终 `int | float` JSON normalization
 - 非法字符、非法语法、除零、空值、超长输入
 - 422 请求模型校验
 - History 保存、排序、删除和持久化
@@ -43,7 +44,7 @@ python -m pytest
 
 ## 3. Frontend 模块测试
 
-最终结果：`4 passed, 0 failed`。
+最终结果：`7 passed, 0 failed`。
 
 在 `calculator-frontend` 中运行：
 
@@ -60,6 +61,8 @@ node tests/frontend-modules.test.mjs
 - 成功计算后只刷新一次 History
 - 删除后只重新加载一次 History
 - Local/Production API URL 选择与 Production HTTPS 约束
+- Calculation POST loading 与 History GET loading 解耦
+- 慢 History、History 失败、POST 失败和连续计算状态
 
 ## 4. 浏览器端到端测试
 
@@ -108,6 +111,8 @@ CORS 场景可能额外出现正常的 OPTIONS 预检；OPTIONS 不属于重复�
 | Nested parentheses | `2*(3+(4*5))` | 46 | 46 | PASS |
 | Left associativity | `10-3-2`, `8/4/2` | 5, 1 | 5, 1 | PASS |
 | Decimal | `1.5+2.3`, `.5+1` | 3.8, 1.5 | 3.8, 1.5 | PASS |
+| Decimal precision | `2.3+5.6`, `0.1+0.2` | 7.9, 0.3 | 7.9, 0.3 | PASS |
+| Decimal operations | `1.2-1.1`, `0.1*0.2`, `0.3/0.1` | 0.1, 0.02, 3 | 符合 | PASS |
 | Unary signs | `-5+8`, `3*-2`, `3--2` | 3, -6, 5 | 3, -6, 5 | PASS |
 | Invalid input | `abc`, `1+*2`, `()` | HTTP 400 | HTTP 400 | PASS |
 | Division by zero | `10/0`, `1/(2-2)` | HTTP 400 | HTTP 400 | PASS |
@@ -126,6 +131,8 @@ CORS 场景可能额外出现正常的 OPTIONS 预检；OPTIONS 不属于重复�
 | CORS loopback | Origin `127.0.0.1:5500` | Allowed | Allowed | PASS |
 | Duplicate submit | Rapid `=` clicks | One POST | One POST | PASS |
 | Duplicate refresh | Successful calculate | One GET History | One GET | PASS |
+| Slow History | POST complete, GET delayed | Result/button ready first | 符合 | PASS |
+| History failure | Calculate succeeds, GET fails | Result remains successful | 符合 | PASS |
 | Delete refresh | Delete button | DELETE + one GET | 符合 | PASS |
 | Backend Offline | Calculate `1+2` offline | No result + error | No result | PASS |
 | Offline UI | Input and clear offline | Still interactive | Interactive | PASS |
@@ -200,3 +207,11 @@ CORS 场景可能额外出现正常的 OPTIONS 预检；OPTIONS 不属于重复�
 - 自定义 `https://example.github.io` CORS Origin 预检返回 200。
 - Repository 根 `index.html` 能跳转到相对路径 `./src/index.html`。
 - Production API placeholder 使用 HTTPS，且非本地 hostname 不会选择 localhost Backend。
+
+## 13. Decimal 与 Loading 回归
+
+- Parser 从原始 NUMBER token 直接构造 `Decimal`，不经过 `float`。
+- Evaluator 使用 precision 256 的局部 Decimal context，并只在 API 边界转换为 `int | float`。
+- `2.3+5.6 → 7.9` 和 `0.1+0.2 → 0.3` 的 API 与 History 结果均通过。
+- 浏览器 E2E 将 History 响应人为延迟 1.2 秒；Result 在 POST 完成后立即显示，等号恢复可用，History 保持独立 loading。
+- History 刷新失败不会覆盖已经成功显示的 Calculation Result。
