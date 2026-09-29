@@ -1,0 +1,262 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  color: #f7f8fc;
+  background: #0a0d14;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 15% 15%, rgb(111 87 255 / 18%), transparent 34rem),
+    radial-gradient(circle at 85% 80%, rgb(28 209 178 / 12%), transparent 30rem),
+    #0a0d14;
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(19rem, 28rem) minmax(17rem, 23rem);
+  gap: 1.5rem;
+  width: min(100% - 2rem, 54rem);
+  margin: 0 auto;
+  padding: clamp(2rem, 7vw, 5rem) 0;
+}
+
+.calculator,
+.history {
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 1.75rem;
+  background: rgb(18 22 32 / 88%);
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 35%);
+  backdrop-filter: blur(1rem);
+}
+
+.calculator {
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.calculator__header,
+.history__heading {
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: #8d96aa;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+h1,
+h2 {
+  margin: 0;
+  letter-spacing: -0.04em;
+}
+
+h1 {
+  font-size: clamp(2rem, 8vw, 3.25rem);
+}
+
+h2 {
+  font-size: 1.45rem;
+}
+
+.display {
+  min-height: 10.5rem;
+  margin-bottom: 1.25rem;
+  padding: 1.25rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 1.25rem;
+  background: #0d1018;
+}
+
+.display__group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.display__group--result {
+  margin-top: 1.6rem;
+}
+
+.display__label {
+  color: #737d92;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.display__expression,
+.display__result {
+  width: 100%;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.display__expression {
+  min-height: 1.5rem;
+  color: #b2b9c8;
+  font-size: 1.15rem;
+}
+
+.display__result {
+  min-height: 2.6rem;
+  color: #ffffff;
+  font-size: clamp(1.75rem, 7vw, 2.5rem);
+  font-weight: 700;
+}
+
+.display__result[data-status="error"] {
+  color: #ff8d9b;
+  font-size: 1rem;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(5, 4rem);
+  gap: 0.75rem;
+}
+
+.key {
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 1rem;
+  color: #eff1f7;
+  background: #1d2230;
+  cursor: pointer;
+  font-size: 1.15rem;
+  font-weight: 650;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.key:hover {
+  border-color: rgb(255 255 255 / 20%);
+  background: #252b3a;
+}
+
+.key:active {
+  transform: scale(0.96);
+}
+
+.key:focus-visible {
+  outline: 3px solid rgb(132 112 255 / 55%);
+  outline-offset: 2px;
+}
+
+.key--operator {
+  color: #bcb1ff;
+  background: #27213f;
+}
+
+.key--clear {
+  grid-column: span 2;
+  color: #ffb4bd;
+  background: #3b2029;
+}
+
+.key--plus {
+  grid-row: span 2;
+}
+
+.key--equals {
+  color: #0c1420;
+  background: #8878ff;
+}
+
+.key--equals:hover {
+  background: #9a8cff;
+}
+
+.key--equals:disabled {
+  color: #4c4e58;
+  background: #242631;
+  cursor: wait;
+}
+
+.key--zero {
+  grid-column: span 3;
+}
+
+.history {
+  align-self: start;
+  min-height: 25rem;
+  padding: 1.5rem;
+}
+
+.history__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.history__list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history__item,
+.history__empty {
+  border-radius: 1rem;
+  background: #0d1018;
+}
+
+.history__item {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+}
+
+.history__expression {
+  overflow-wrap: anywhere;
+  color: #8992a5;
+  font-size: 0.86rem;
+}
+
+.history__result {
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.history__empty {
+  padding: 3rem 1rem;
+  color: #697286;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .history {
+    min-height: 12rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .key {
+    transition: none;
+  }
+}
