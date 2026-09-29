@@ -220,6 +220,30 @@ async function run() {
       'Successful calculation should make one history GET',
     );
 
+    const regressionCases = [
+      {expression: '1+2', result: '3'},
+      {expression: '1+2*3', result: '7'},
+      {expression: '(1+2)*3', result: '9'},
+      {expression: '3*-2', result: '-6'},
+      {expression: '0.5+1.25', result: '1.75'},
+    ];
+
+    for (const testCase of regressionCases) {
+      await clickExpression(client, testCase.expression);
+      await client.waitFor(
+        `document.querySelector('#result-display').textContent
+          === ${JSON.stringify(testCase.result)}`,
+        `${testCase.expression} result`,
+      );
+      await client.waitFor(
+        `[...document.querySelectorAll('.history__expression')]
+          .some((item) => (
+            item.textContent === ${JSON.stringify(testCase.expression)}
+          ))`,
+        `${testCase.expression} history`,
+      );
+    }
+
     client.requests.length = 0;
     await clickExpression(client, '1+*2');
     await client.waitFor(

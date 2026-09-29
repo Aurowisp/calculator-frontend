@@ -1,15 +1,25 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
 
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const projectRoot = new URL('../', import.meta.url);
 
 
 async function loadModule(relativePath) {
-  const source = await readFile(`${projectRoot}${relativePath}`, 'utf8');
-  const encodedSource = Buffer.from(source).toString('base64');
-  return import(`data:text/javascript;base64,${encodedSource}`);
+  return import(new URL(relativePath, projectRoot));
+}
+
+
+async function testApiConfiguration() {
+  const {
+    PRODUCTION_API_URL,
+    resolveApiBaseUrl,
+  } = await loadModule('src/js/config.js');
+
+  assert.equal(resolveApiBaseUrl('localhost'), 'http://localhost:8000');
+  assert.equal(resolveApiBaseUrl('127.0.0.1'), 'http://localhost:8000');
+  assert.equal(resolveApiBaseUrl('example.github.io'), PRODUCTION_API_URL);
+  assert.match(PRODUCTION_API_URL, /^https:\/\//u);
+  assert.equal(PRODUCTION_API_URL.includes('localhost'), false);
 }
 
 
@@ -169,8 +179,9 @@ async function testHistoryRequestCounts() {
 }
 
 
+await testApiConfiguration();
 await testApiModule();
 await testSingleCalculationRequest();
 await testHistoryRequestCounts();
 
-console.log('Frontend module tests: 3 passed, 0 failed');
+console.log('Frontend module tests: 4 passed, 0 failed');

@@ -2,6 +2,13 @@
 
 软件工程课程的前后端分离计算器系统前端。Frontend 使用 HTML、CSS 和 JavaScript，通过 REST API 连接独立的 FastAPI Backend。
 
+## 技术栈
+
+- HTML5
+- CSS
+- JavaScript ES Modules
+- GitHub Pages（Production 静态托管目标）
+
 ## 功能
 
 - 输入数字 `0-9`
@@ -19,13 +26,16 @@ Frontend 不会计算表达式，也没有使用 `eval()`、`Function()` 或本�
 
 ```text
 calculator-frontend/
+├── index.html                 # GitHub Pages repository 根入口
 ├── README.md
 ├── codestyle.md
+├── tests/                     # 模块和浏览器端到端测试
 └── src/
     ├── index.html            # 页面结构
     ├── css/
     │   └── styles.css        # 页面样式与响应式布局
     └── js/
+        ├── config.js         # Local/Production API URL 唯一配置源
         ├── api.js            # 后端 API 调用
         ├── calculator.js     # 表达式输入与计算请求流程
         ├── history.js        # 历史加载、删除和刷新流程
@@ -59,13 +69,22 @@ Backend 需要独立启动并监听 `http://localhost:8000`。
 
 ## Backend Integration
 
-开发 API 地址集中定义在 `src/js/api.js`：
+API 地址的唯一配置源是 `src/js/config.js`。Local 页面运行在 `localhost`、`127.0.0.1` 或 IPv6 loopback 时使用：
 
 ```javascript
-export const API_BASE_URL = 'http://localhost:8000';
+const LOCAL_API_URL = 'http://localhost:8000';
 ```
 
-后续部署只需要修改这一处。Frontend 使用以下接口：
+其他 hostname 被视为 Production，并使用同一文件中的公开 HTTPS Backend 地址：
+
+```javascript
+export const PRODUCTION_API_URL =
+  'https://REPLACE-WITH-PRODUCTION-BACKEND';
+```
+
+部署 Backend 后只替换这个 placeholder，不要在 `api.js`、`calculator.js` 或 `history.js` 中重复配置 URL。GitHub Pages 是 HTTPS，Backend URL 也必须使用 HTTPS，否则浏览器会阻止 Mixed Content。
+
+Frontend 使用以下接口：
 
 - `POST /api/calculate`
 - `GET /api/history`
@@ -96,7 +115,7 @@ Content-Type: application/json
 }
 ```
 
-成功后，Frontend 重新调用 `GET /api/history`，历史区域始终以 Backend SQLite 数据为准。删除记录成功后也会重新请求历史，而不是仅删除本地 DOM。
+成功后，Frontend 重新调用 `GET /api/history`，历史区域始终以 Backend Database 数据为准。删除记录成功后也会重新请求历史，而不是仅删除本地 DOM。
 
 如果 Backend 返回 400、404、422 或 500，页面会优先显示响应中的错误信息。Backend 未启动时显示“无法连接后端服务”，不会退回到 JavaScript 本地计算。
 
@@ -114,6 +133,26 @@ Content-Type: application/json
 
 历史记录不使用 LocalStorage、SessionStorage、IndexedDB 或内存数组作为数据源。
 
+## GitHub Pages Deployment
+
+Repository 根目录的 `index.html` 会使用相对路径跳转到 `./src/index.html`，因此项目站点根地址可以直接进入计算器：
+
+```text
+https://<GITHUB_USERNAME>.github.io/calculator-frontend/
+```
+
+`src/index.html` 的 CSS、JavaScript 和 ES Module import 均使用相对路径，兼容 GitHub Pages 的 `/calculator-frontend/` repository prefix。
+
+部署步骤：
+
+1. 先部署 FastAPI Backend 和 PostgreSQL。
+2. 将 `src/js/config.js` 中唯一的 Production placeholder 替换为 Backend 的公开 HTTPS URL。
+3. 在 Backend 平台把 `CORS_ORIGINS` 设置为 GitHub Pages Origin，例如 `https://<GITHUB_USERNAME>.github.io`；不要附加 `/calculator-frontend/`。
+4. 在 GitHub Repository Settings → Pages 中选择发布分支和 repository root。
+5. 验证 `/health`、计算、History 持久化和删除。
+
+当前没有已知的真实 Backend 或 Frontend Production URL，文档中的值均为明确 placeholder。Frontend 不包含数据库连接、密码、token 或其他 Secret。
+
 ## 测试
 
 Frontend 模块测试：
@@ -121,5 +160,7 @@ Frontend 模块测试：
 ```powershell
 node tests/frontend-modules.test.mjs
 ```
+
+当前模块测试结果为 `4 passed`，包含 Local/Production API URL 选择检查。浏览器端到端测试验证计算只发送一次 POST 和一次 History GET、删除只发送一次 DELETE 和一次 History GET，并验证 Backend Offline 时不会执行本地计算。
 
 完整的 Backend、API、浏览器端到端、持久化、离线及测试矩阵记录参见 [TESTING.md](./TESTING.md)。

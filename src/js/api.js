@@ -1,4 +1,6 @@
-export const API_BASE_URL = 'http://localhost:8000';
+import {API_BASE_URL} from './config.js';
+
+export {API_BASE_URL};
 
 export class ApiError extends Error {
   constructor(message, status = null) {

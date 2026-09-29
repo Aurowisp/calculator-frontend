@@ -15,7 +15,7 @@ Frontend 和 Backend 始终作为两个独立项目运行，通过 HTTP/JSON 通
 
 ## 2. Backend 自动测试
 
-最终结果：`78 passed, 0 failed, 0 errors, 1 warning`。
+最终结果：`82 passed, 0 failed, 0 errors, 1 warning`。
 
 该 warning 是 FastAPI 测试客户端触发的上游 `StarletteDeprecationWarning`，不影响应用行为。
 
@@ -37,10 +37,13 @@ python -m pytest
 - History 保存、排序、删除和持久化
 - 404 和安全的 500 响应
 - `localhost:5500` 与 `127.0.0.1:5500` CORS
+- `/health` 无副作用健康检查
+- Local SQLite fallback 与 PostgreSQL psycopg URL 配置
+- 逗号分隔的 Production CORS Origin 解析
 
 ## 3. Frontend 模块测试
 
-最终结果：`3 passed, 0 failed`。
+最终结果：`4 passed, 0 failed`。
 
 在 `calculator-frontend` 中运行：
 
@@ -56,6 +59,7 @@ node tests/frontend-modules.test.mjs
 - 快速重复点击等号只产生一个计算请求
 - 成功计算后只刷新一次 History
 - 删除后只重新加载一次 History
+- Local/Production API URL 选择与 Production HTTPS 约束
 
 ## 4. 浏览器端到端测试
 
@@ -186,3 +190,13 @@ CORS 场景可能额外出现正常的 OPTIONS 预检；OPTIONS 不属于重复�
 ## 11. 已知测试提示
 
 当前 FastAPI/Starlette TestClient 会输出一条上游依赖弃用 warning，但不影响测试成功，也没有 failed 或 error。后续依赖升级阶段可统一处理，不需要在 Phase 7 改动业务代码。
+
+## 12. Deployment readiness 验证
+
+- `DATABASE_URL` 未设置时使用项目根目录 SQLite。
+- `postgres://` 和 `postgresql://` 会转换为 `postgresql+psycopg://`。
+- SQLAlchemy 已验证加载 `psycopg` PostgreSQL dialect，未连接真实 Cloud Database。
+- `$PORT` 测试实例成功监听 `0.0.0.0:8010`，`GET /health` 返回 200。
+- 自定义 `https://example.github.io` CORS Origin 预检返回 200。
+- Repository 根 `index.html` 能跳转到相对路径 `./src/index.html`。
+- Production API placeholder 使用 HTTPS，且非本地 hostname 不会选择 localhost Backend。
