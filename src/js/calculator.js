@@ -1,25 +1,30 @@
-const DEFAULT_EXPRESSION_TEXT = '0';
-const DEFAULT_RESULT_TEXT = '等待输入';
-const REQUESTING_TEXT = '正在等待后端…';
-
 export class CalculatorController {
-  constructor({api, elements}) {
+  constructor({api, historyController, keypad, ui}) {
     this.api = api;
-    this.elements = elements;
+    this.historyController = historyController;
+    this.keypad = keypad;
+    this.ui = ui;
     this.expression = '';
+    this.isInitialized = false;
+    this.isRequesting = false;
   }
 
   initialize() {
-    this.elements.keypad.addEventListener('click', (event) => {
+    if (this.isInitialized) {
+      return;
+    }
+
+    this.isInitialized = true;
+    this.keypad.addEventListener('click', (event) => {
       this.handleKeypadClick(event);
     });
-    this.renderExpression();
+    this.ui.showExpression(this.expression);
   }
 
   handleKeypadClick(event) {
     const button = event.target.closest('button');
 
-    if (!button || !this.elements.keypad.contains(button)) {
+    if (!button || !this.keypad.contains(button)) {
       return;
     }
 
@@ -34,76 +39,44 @@ export class CalculatorController {
     }
 
     if (button.dataset.action === 'calculate') {
-      this.requestCalculation();
+      void this.requestCalculation();
     }
   }
 
   appendToExpression(value) {
     this.expression += value;
-    this.renderExpression();
+    this.ui.showExpression(this.expression);
   }
 
   clear() {
     this.expression = '';
-    this.elements.result.textContent = DEFAULT_RESULT_TEXT;
-    delete this.elements.result.dataset.status;
-    this.renderExpression();
+    this.ui.showExpression(this.expression);
+    this.ui.resetResult();
   }
 
   async requestCalculation() {
-    if (!this.expression) {
+    if (!this.expression || this.isRequesting) {
       return;
     }
 
     const requestedExpression = this.expression;
-    this.setRequestState(true);
+    this.isRequesting = true;
+    this.ui.setCalculationLoading(true);
 
     try {
       const response = await this.api.calculate(requestedExpression);
-      const result = response.result;
 
-      if (result === undefined || result === null) {
+      if (response.result === undefined || response.result === null) {
         throw new Error('后端响应中缺少 result 字段');
       }
 
-      this.elements.result.textContent = String(result);
-      delete this.elements.result.dataset.status;
-      this.addHistoryItem(requestedExpression, result);
+      this.ui.showResult(response.result);
+      await this.historyController.refresh();
     } catch (error) {
-      this.elements.result.textContent = error.message || '无法连接到计算服务';
-      this.elements.result.dataset.status = 'error';
+      this.ui.showResultError(error.message || '计算服务不可用');
     } finally {
-      this.setRequestState(false);
+      this.isRequesting = false;
+      this.ui.setCalculationLoading(false);
     }
-  }
-
-  renderExpression() {
-    this.elements.expression.textContent =
-      this.expression || DEFAULT_EXPRESSION_TEXT;
-  }
-
-  setRequestState(isRequesting) {
-    this.elements.calculateButton.disabled = isRequesting;
-
-    if (isRequesting) {
-      this.elements.result.textContent = REQUESTING_TEXT;
-      delete this.elements.result.dataset.status;
-    }
-  }
-
-  addHistoryItem(expression, result) {
-    this.elements.historyEmpty?.remove();
-
-    const item = document.createElement('li');
-    const expressionText = document.createElement('span');
-    const resultText = document.createElement('strong');
-
-    item.className = 'history__item';
-    expressionText.className = 'history__expression';
-    resultText.className = 'history__result';
-    expressionText.textContent = expression;
-    resultText.textContent = `= ${String(result)}`;
-    item.append(expressionText, resultText);
-    this.elements.historyList.prepend(item);
   }
 }

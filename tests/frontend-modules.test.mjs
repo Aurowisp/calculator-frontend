@@ -1,0 +1,176 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+
+
+const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+
+
+async function loadModule(relativePath) {
+  const source = await readFile(`${projectRoot}${relativePath}`, 'utf8');
+  const encodedSource = Buffer.from(source).toString('base64');
+  return import(`data:text/javascript;base64,${encodedSource}`);
+}
+
+
+async function testApiModule() {
+  const {api} = await loadModule('src/js/api.js');
+  const requests = [];
+
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({url, options});
+
+    if (url.endsWith('/api/calculate')) {
+      return new Response(
+        JSON.stringify({success: true, expression: '1+2', result: 3}),
+        {status: 200},
+      );
+    }
+
+    if (options.method === 'DELETE') {
+      return new Response(
+        JSON.stringify({success: true, message: 'History record deleted'}),
+        {status: 200},
+      );
+    }
+
+    return new Response(JSON.stringify([]), {status: 200});
+  };
+
+  const response = await api.calculate('1+2');
+  await api.getHistory();
+  await api.deleteHistory(12);
+
+  assert.equal(response.result, 3);
+  assert.equal(requests[0].url, 'http://localhost:8000/api/calculate');
+  assert.equal(requests[0].options.method, 'POST');
+  assert.equal(requests[0].options.body, '{"expression":"1+2"}');
+  assert.equal(requests[1].url, 'http://localhost:8000/api/history');
+  assert.equal(requests[2].options.method, 'DELETE');
+
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({success: false, message: 'Division by zero'}),
+    {status: 400},
+  );
+
+  await assert.rejects(
+    () => api.calculate('10/0'),
+    {message: 'Division by zero'},
+  );
+
+  globalThis.fetch = async () => {
+    throw new TypeError('Backend offline');
+  };
+
+  await assert.rejects(
+    () => api.calculate('1+2'),
+    {message: '无法连接后端服务'},
+  );
+}
+
+
+async function testSingleCalculationRequest() {
+  const {CalculatorController} = await loadModule(
+    'src/js/calculator.js',
+  );
+  let resolveCalculation;
+  let calculationRequests = 0;
+  let keypadListeners = 0;
+  let historyRequests = 0;
+  const resultValues = [];
+
+  const controller = new CalculatorController({
+    api: {
+      calculate: async () => {
+        calculationRequests += 1;
+        return new Promise((resolve) => {
+          resolveCalculation = resolve;
+        });
+      },
+    },
+    historyController: {
+      refresh: async () => {
+        historyRequests += 1;
+      },
+    },
+    keypad: {
+      addEventListener() {
+        keypadListeners += 1;
+      },
+      contains() {
+        return true;
+      },
+    },
+    ui: {
+      showExpression() {},
+      resetResult() {},
+      showResult(result) {
+        resultValues.push(result);
+      },
+      showResultError() {},
+      setCalculationLoading() {},
+    },
+  });
+
+  controller.initialize();
+  controller.initialize();
+  assert.equal(keypadListeners, 1);
+
+  controller.expression = '55+6';
+  const firstRequest = controller.requestCalculation();
+  const duplicateRequest = controller.requestCalculation();
+
+  assert.equal(calculationRequests, 1);
+  resolveCalculation({result: 61});
+  await Promise.all([firstRequest, duplicateRequest]);
+
+  assert.deepEqual(resultValues, [61]);
+  assert.equal(historyRequests, 1);
+}
+
+
+async function testHistoryRequestCounts() {
+  const {HistoryController} = await loadModule('src/js/history.js');
+  let historyRequests = 0;
+  let deleteRequests = 0;
+  let deleteHandler;
+
+  const controller = new HistoryController({
+    api: {
+      getHistory: async () => {
+        historyRequests += 1;
+        return [];
+      },
+      deleteHistory: async () => {
+        deleteRequests += 1;
+      },
+    },
+    ui: {
+      showHistoryLoading() {},
+      showHistoryError(message) {
+        throw new Error(message);
+      },
+      renderHistory(_records, onDelete) {
+        deleteHandler = onDelete;
+      },
+    },
+  });
+
+  await controller.initialize();
+  await controller.initialize();
+  assert.equal(historyRequests, 1);
+
+  await controller.refresh();
+  assert.equal(historyRequests, 2);
+
+  await deleteHandler(1);
+  assert.equal(deleteRequests, 1);
+  assert.equal(historyRequests, 3);
+}
+
+
+await testApiModule();
+await testSingleCalculationRequest();
+await testHistoryRequestCounts();
+
+console.log('Frontend module tests: 3 passed, 0 failed');
