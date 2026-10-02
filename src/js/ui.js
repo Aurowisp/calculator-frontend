@@ -1,5 +1,5 @@
 const DEFAULT_EXPRESSION_TEXT = '0';
-const DEFAULT_RESULT_TEXT = '等待输入';
+const DEFAULT_RESULT_TEXT = '';
 
 export class CalculatorUI {
   constructor(elements) {
@@ -30,13 +30,13 @@ export class CalculatorUI {
     this.elements.calculateButton.disabled = isLoading;
 
     if (isLoading) {
-      this.elements.result.textContent = '正在等待后端…';
+      this.elements.result.textContent = 'Waiting for the server...';
       delete this.elements.result.dataset.status;
     }
   }
 
   showHistoryLoading() {
-    this.renderHistoryMessage('正在加载历史记录…');
+    this.renderHistoryMessage('Loading history...');
   }
 
   showHistoryError(message) {
@@ -47,7 +47,7 @@ export class CalculatorUI {
     this.elements.historyList.replaceChildren();
 
     if (records.length === 0) {
-      this.renderHistoryMessage('暂无计算记录');
+      this.renderHistoryMessage('No history yet');
       return;
     }
 
@@ -88,8 +88,8 @@ export class CalculatorUI {
     time.dateTime = record.created_at;
     time.textContent = formatDateTime(record.created_at);
     deleteButton.type = 'button';
-    deleteButton.textContent = '删除';
-    deleteButton.setAttribute('aria-label', `删除表达式 ${record.expression}`);
+    deleteButton.textContent = 'Delete';
+    deleteButton.setAttribute('aria-label', `Delete expression ${record.expression}`);
 
     deleteButton.addEventListener('click', async () => {
       deleteButton.disabled = true;
@@ -103,7 +103,7 @@ export class CalculatorUI {
 
 function formatDateTime(value) {
   if (typeof value !== 'string' || value.length === 0) {
-    return '时间未知';
+    return 'Time unavailable';
   }
 
   const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/u.test(value);
@@ -113,5 +113,5 @@ function formatDateTime(value) {
     return value;
   }
 
-  return date.toLocaleString('zh-CN');
+  return date.toLocaleString('en-US');
 }

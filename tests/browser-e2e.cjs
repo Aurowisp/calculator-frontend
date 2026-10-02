@@ -229,7 +229,7 @@ async function run() {
     await client.waitFor(
       `document.readyState === 'complete'
         && !document.querySelector('.history__empty')
-          ?.textContent.includes('正在加载')`,
+          ?.textContent.includes('Loading history')`,
       'initial history load',
     );
     await sleep(300);
@@ -306,7 +306,7 @@ async function run() {
     assert.equal(
       await client.evaluate(
         `document.querySelector('.history__empty')?.textContent
-          === '正在加载历史记录…'`,
+          === 'Loading history...'`,
       ),
       true,
       'History should retain its independent loading state',
@@ -458,7 +458,7 @@ async function run() {
       await clickExpression(client, '1+2');
       await client.waitFor(
         `document.querySelector('#result-display').textContent
-          === '无法连接后端服务'`,
+          === 'Unable to connect to the server'`,
         'offline backend error',
       );
       assert.equal(

@@ -16,7 +16,7 @@ async function request(path, options = {}) {
   try {
     response = await fetch(`${API_BASE_URL}${path}`, options);
   } catch {
-    throw new ApiError('无法连接后端服务');
+    throw new ApiError('Unable to connect to the server');
   }
 
   const responseBody = await readJson(response);
@@ -29,7 +29,7 @@ async function request(path, options = {}) {
   }
 
   if (responseBody === null) {
-    throw new ApiError('后端返回了无效响应', response.status);
+    throw new ApiError('The server returned an invalid response', response.status);
   }
 
   return responseBody;
@@ -79,7 +79,7 @@ async function getHistory() {
   const history = await request('/api/history');
 
   if (!Array.isArray(history)) {
-    throw new ApiError('后端返回了无效的历史记录');
+    throw new ApiError('The server returned invalid history data');
   }
 
   return history;

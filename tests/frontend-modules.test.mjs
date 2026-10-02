@@ -74,7 +74,7 @@ async function testApiModule() {
 
   await assert.rejects(
     () => api.calculate('1+2'),
-    {message: '无法连接后端服务'},
+    {message: 'Unable to connect to the server'},
   );
 }
 

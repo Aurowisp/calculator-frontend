@@ -67,13 +67,13 @@ export class CalculatorController {
       const response = await this.api.calculate(requestedExpression);
 
       if (response.result === undefined || response.result === null) {
-        throw new Error('后端响应中缺少 result 字段');
+        throw new Error('The server response is missing a result');
       }
 
       this.ui.showResult(response.result);
       void this.historyController.refresh();
     } catch (error) {
-      this.ui.showResultError(error.message || '计算服务不可用');
+      this.ui.showResultError(error.message || 'Calculation failed');
     } finally {
       this.isRequesting = false;
       this.ui.setCalculationLoading(false);

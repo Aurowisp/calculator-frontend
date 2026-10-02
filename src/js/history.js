@@ -36,7 +36,7 @@ export class HistoryController {
         return;
       }
 
-      this.ui.showHistoryError(error.message || '无法加载历史记录');
+      this.ui.showHistoryError(error.message || 'Unable to load history');
     }
   }
 
@@ -45,7 +45,7 @@ export class HistoryController {
       await this.api.deleteHistory(id);
       await this.refresh();
     } catch (error) {
-      this.ui.showHistoryError(error.message || '无法删除历史记录');
+      this.ui.showHistoryError(error.message || 'Unable to delete history');
     }
   }
 }
