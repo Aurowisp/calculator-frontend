@@ -1,168 +1,191 @@
 # Calculator Frontend
 
-软件工程课程的前后端分离计算器系统前端。Frontend 使用 HTML、CSS 和 JavaScript，通过 REST API 连接独立的 FastAPI Backend。
+## Overview
 
-## 技术栈
+This repository contains the browser client for a front-end/back-end separated
+calculator course project. The client collects expressions, sends them to the
+FastAPI service, displays returned results, and manages calculation history.
+
+The browser never evaluates mathematical expressions. Calculation and history
+persistence belong exclusively to the backend.
+
+## Live Services
+
+- Frontend: <https://aurowisp.github.io/calculator-frontend/>
+- Backend API: <https://calculator-backend-1m81.onrender.com>
+- API documentation: <https://calculator-backend-1m81.onrender.com/docs>
+- Frontend repository: <https://github.com/Aurowisp/calculator-frontend>
+- Backend repository: <https://github.com/Aurowisp/calculator-backend>
+
+## Current Features
+
+- Number keys `0` through `9`
+- Addition, subtraction, multiplication, and division operators
+- Decimal points, parentheses, and unary signs
+- Clear and calculate actions
+- Separate expression and result displays
+- Server-backed calculation history, ordered newest first
+- Deletion of an individual history record
+- Loading, empty, and error states
+- Responsive desktop and mobile layouts
+- English-only user interface and messages
+
+The current desktop interface uses a two-column card: the calculator is on the
+left and the always-visible history panel is on the right. At widths of 700 px
+or less, the sections stack vertically. This implemented layout is the source
+of truth for the project documentation.
+
+## Technology
 
 - HTML5
-- CSS
-- JavaScript ES Modules
-- GitHub Pages（Production 静态托管目标）
+- CSS3
+- Modern JavaScript with ES modules
+- Fetch API
+- Node.js only for automated frontend tests
 
-## 功能
+There is no build step and no runtime JavaScript framework.
 
-- 输入数字 `0-9`
-- 输入加、减、乘、除、括号和小数点
-- 清除当前表达式
-- 展示当前表达式和后端返回的结果
-- 页面加载时读取 Backend 数据库历史
-- 成功计算后自动刷新历史
-- 删除指定数据库历史记录
-- 统一处理 Backend 和网络错误
-
-Frontend 不会计算表达式，也没有使用 `eval()`、`Function()` 或本地 Parser/Evaluator。所有数学计算和最终校验都由 Backend 完成。
-
-## 项目结构
+## Project Structure
 
 ```text
 calculator-frontend/
-├── index.html                 # GitHub Pages repository 根入口
-├── README.md
-├── codestyle.md
-├── tests/                     # 模块和浏览器端到端测试
-└── src/
-    ├── index.html            # 页面结构
-    ├── css/
-    │   └── styles.css        # 页面样式与响应式布局
-    └── js/
-        ├── config.js         # Local/Production API URL 唯一配置源
-        ├── api.js            # 后端 API 调用
-        ├── calculator.js     # 表达式输入与计算请求流程
-        ├── history.js        # 历史加载、删除和刷新流程
-        ├── ui.js             # 页面状态与安全 DOM 渲染
-        └── main.js           # 应用入口与模块装配
+|-- index.html                  # GitHub Pages entry and redirect
+|-- src/
+|   |-- index.html              # Application page
+|   |-- css/
+|   |   `-- styles.css          # Responsive layout and component styles
+|   `-- js/
+|       |-- api.js              # HTTP client and API error normalization
+|       |-- calculator.js       # Expression input and calculation requests
+|       |-- config.js           # Local/production API URL selection
+|       |-- history.js          # History loading and deletion
+|       |-- main.js             # Application composition and startup
+|       `-- ui.js               # DOM rendering and UI state helpers
+|-- tests/
+|   |-- browser-e2e.cjs         # Browser-level integration checks
+|   `-- frontend-modules.test.mjs
+|-- README.md
+|-- TESTING.md
+`-- codestyle.md
 ```
 
-## 本地运行
+## Local Setup
 
-ES Modules 需要通过 HTTP 服务加载，不应使用 `file:///` 直接打开。推荐使用 VS Code Live Server，在 `5500` 端口访问：
+### Prerequisites
+
+- A modern browser
+- Python 3.x or another static-file server
+- The calculator backend running locally on port `8000`
+
+No package installation is required to run the frontend.
+
+### Start the Backend
+
+Follow the backend repository instructions, then verify:
 
 ```text
-http://127.0.0.1:5500/src/index.html
+http://localhost:8000/health
 ```
 
-如果 VS Code 打开的是同时包含 Frontend 和 Backend 的
-`D:\Software-engineering` 目录，请使用工作区中的 `.vscode/settings.json`。
-该配置将 Live Server 根目录限制为 `calculator-frontend`，并忽略 Backend
-和 SQLite 数据库文件，避免计算写入数据库时触发 Frontend 自动刷新。
-配置新增或修改后，需要停止并重新启动一次 Live Server。
+### Start the Frontend
 
-也可以在项目目录运行：
+From this repository:
 
 ```bash
 python -m http.server 5500
 ```
 
-然后访问 `http://127.0.0.1:5500/src/index.html`。
+Open:
 
-Backend 需要独立启动并监听 `http://localhost:8000`。
-
-## Backend Integration
-
-API 地址的唯一配置源是 `src/js/config.js`。Local 页面运行在 `localhost`、`127.0.0.1` 或 IPv6 loopback 时使用：
-
-```javascript
-const LOCAL_API_URL = 'http://localhost:8000';
+```text
+http://localhost:5500/src/index.html
 ```
 
-其他 hostname 被视为 Production，并使用同一文件中的公开 HTTPS Backend 地址：
+Do not open `src/index.html` directly with a `file://` URL because browser ES
+module and CORS rules require an HTTP origin.
 
-```javascript
-export const PRODUCTION_API_URL =
-  'https://REPLACE-WITH-PRODUCTION-BACKEND';
-```
+## API Configuration
 
-部署 Backend 后只替换这个 placeholder，不要在 `api.js`、`calculator.js` 或 `history.js` 中重复配置 URL。GitHub Pages 是 HTTPS，Backend URL 也必须使用 HTTPS，否则浏览器会阻止 Mixed Content。
+`src/js/config.js` selects the backend automatically:
 
-Frontend 使用以下接口：
+- `localhost`, `127.0.0.1`, or `[::1]` uses `http://localhost:8000`.
+- Any other host uses `https://calculator-backend-1m81.onrender.com`.
 
-- `POST /api/calculate`
-- `GET /api/history`
-- `DELETE /api/history/{id}`
+Update `PRODUCTION_API_URL` only when the deployed backend address changes.
+The backend must also allow the exact frontend origin through `CORS_ORIGINS`.
 
-点击等号后发送：
+## API Usage
 
-```http
-POST /api/calculate
-Content-Type: application/json
-```
+The frontend uses three endpoints:
 
-请求体：
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/calculate` | Calculate and persist one expression |
+| `GET` | `/api/history` | Load all history records |
+| `DELETE` | `/api/history/{id}` | Delete one history record |
+
+Example request:
 
 ```json
 {
-  "expression": "12+3"
+  "expression": "(1.2+3.4)*2"
 }
 ```
 
-前端期望后端返回：
+Example response:
 
 ```json
 {
   "success": true,
-  "expression": "12+3",
-  "result": 15
+  "expression": "(1.2+3.4)*2",
+  "result": 9.2
 }
 ```
 
-成功后，Frontend 重新调用 `GET /api/history`，历史区域始终以 Backend Database 数据为准。删除记录成功后也会重新请求历史，而不是仅删除本地 DOM。
+After a successful calculation, the result is rendered immediately. History is
+then refreshed asynchronously, so a slow history request does not delay the
+result display. Initial history loading also does not block calculator input.
 
-如果 Backend 返回 400、404、422 或 500，页面会优先显示响应中的错误信息。Backend 未启动时显示“无法连接后端服务”，不会退回到 JavaScript 本地计算。
+If the backend is unavailable, the page remains interactive and shows an error.
+It does not calculate locally or create fake history records.
 
-## 开发启动顺序
+## Deployment
 
-1. 在 `calculator-backend` 中激活虚拟环境并运行：
+The frontend is deployed as a static GitHub Pages site. The root `index.html`
+redirects to `src/index.html`, and all application assets use relative paths.
 
-   ```powershell
-   uvicorn src.main:app
-   ```
+Deployment checklist:
 
-2. 在 `calculator-frontend` 中启动 Live Server 或静态服务器。
-3. 打开 `http://127.0.0.1:5500/src/index.html`。
-4. 在浏览器 Network 面板中可观察计算时的 POST/GET，以及删除时的 DELETE/GET。
+1. Verify the production backend URL in `src/js/config.js`.
+2. Configure the backend `CORS_ORIGINS` with the GitHub Pages origin.
+3. Run the tests described in `TESTING.md`.
+4. Push the reviewed files to the branch served by GitHub Pages.
+5. Verify calculation, history refresh, and deletion on the live site.
 
-历史记录不使用 LocalStorage、SessionStorage、IndexedDB 或内存数组作为数据源。
+Hosted backend platforms may have a cold start after inactivity. The frontend
+keeps the request pending and exposes a loading state while it waits.
 
-Calculator 交互初始化不等待首次 History 请求完成。Production Backend 从休眠状态启动时，用户仍可立即输入表达式；数学结果仍必须等待 Backend 完成计算和数据库持久化后返回，Frontend 不提供本地计算 fallback。
+## Testing
 
-## GitHub Pages Deployment
+Run the dependency-free module tests with Node.js:
 
-Repository 根目录的 `index.html` 会使用相对路径跳转到 `./src/index.html`，因此项目站点根地址可以直接进入计算器：
-
-```text
-https://<GITHUB_USERNAME>.github.io/calculator-frontend/
-```
-
-`src/index.html` 的 CSS、JavaScript 和 ES Module import 均使用相对路径，兼容 GitHub Pages 的 `/calculator-frontend/` repository prefix。
-
-部署步骤：
-
-1. 先部署 FastAPI Backend 和 PostgreSQL。
-2. 将 `src/js/config.js` 中唯一的 Production placeholder 替换为 Backend 的公开 HTTPS URL。
-3. 在 Backend 平台把 `CORS_ORIGINS` 设置为 GitHub Pages Origin，例如 `https://<GITHUB_USERNAME>.github.io`；不要附加 `/calculator-frontend/`。
-4. 在 GitHub Repository Settings → Pages 中选择发布分支和 repository root。
-5. 验证 `/health`、计算、History 持久化和删除。
-
-当前没有已知的真实 Backend 或 Frontend Production URL，文档中的值均为明确 placeholder。Frontend 不包含数据库连接、密码、token 或其他 Secret。
-
-## 测试
-
-Frontend 模块测试：
-
-```powershell
+```bash
 node tests/frontend-modules.test.mjs
 ```
 
-当前模块测试结果为 `4 passed`，包含 Local/Production API URL 选择检查。浏览器端到端测试验证计算只发送一次 POST 和一次 History GET、删除只发送一次 DELETE 和一次 History GET，并验证 Backend Offline 时不会执行本地计算。
+Current result: **7 tests passed**.
 
-完整的 Backend、API、浏览器端到端、持久化、离线及测试矩阵记录参见 [TESTING.md](./TESTING.md)。
+Browser integration testing and the complete manual verification matrix are
+documented in [TESTING.md](TESTING.md).
+
+## Engineering Constraints
+
+- Never use `eval()`, `Function()`, or any browser-side expression evaluator.
+- Never duplicate backend arithmetic or parsing logic in the frontend.
+- Keep persistence in the backend database; do not use browser storage as a
+  history source.
+- Use `textContent` for server-provided content instead of injecting HTML.
+- Keep controllers, API access, configuration, and rendering in separate
+  modules.
+
+See [codestyle.md](codestyle.md) for the project conventions.

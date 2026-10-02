@@ -1,230 +1,190 @@
-# Full System Testing
+# Frontend Verification and Test Guide
 
-## 1. 测试环境
+This document covers automated, browser, manual, architecture, and production
+checks for the calculator frontend.
 
-- 日期：2026-09-29
-- 操作系统：Windows
-- Python：3.11.4
-- Node.js：24.11.0
-- 浏览器：Microsoft Edge Headless（Chrome DevTools Protocol）
-- Frontend：`http://localhost:5500/src/index.html`
-- Backend：`http://localhost:8000`
-- 数据库：SQLite
+## Last Verified Baseline
 
-Frontend 和 Backend 始终作为两个独立项目运行，通过 HTTP/JSON 通信。
+Verified on **2026-10-03** with:
 
-## 2. Backend 自动测试
+- Windows
+- Python 3.11.4
+- Node.js 24.11
+- Microsoft Edge in headless mode
+- Frontend: `http://localhost:5500/src/index.html`
+- Backend: `http://127.0.0.1:8000`
+- An isolated SQLite database for browser testing
 
-最终结果：`93 passed, 0 failed, 0 errors, 1 warning`。
+Results:
 
-该 warning 是 FastAPI 测试客户端触发的上游 `StarletteDeprecationWarning`，不影响应用行为。
+- Frontend module tests: **7 passed**
+- Backend tests used by the integration baseline: **93 passed**
+- Browser integration scenario: **passed**
+- Browser console errors: **0**
 
-在 `calculator-backend` 中运行：
+The backend suite currently emits one upstream Starlette deprecation warning;
+it does not represent a test failure.
 
-```powershell
-venv\Scripts\activate
-python -m pytest
-```
+## 1. Frontend Module Tests
 
-测试使用 pytest 临时目录中的隔离 SQLite 文件，并通过 FastAPI dependency override 替换开发数据库 Session。测试前后开发数据库记录数量保持不变。
+Run from `calculator-frontend`:
 
-覆盖范围：
-
-- 四则运算、优先级、左结合
-- 括号、嵌套括号、小数、一元正负号
-- Decimal 精确运算与最终 `int | float` JSON normalization
-- 非法字符、非法语法、除零、空值、超长输入
-- 422 请求模型校验
-- History 保存、排序、删除和持久化
-- 404 和安全的 500 响应
-- `localhost:5500` 与 `127.0.0.1:5500` CORS
-- `/health` 无副作用健康检查
-- Local SQLite fallback 与 PostgreSQL psycopg URL 配置
-- 逗号分隔的 Production CORS Origin 解析
-
-## 3. Frontend 模块测试
-
-最终结果：`7 passed, 0 failed`。
-
-在 `calculator-frontend` 中运行：
-
-```powershell
+```bash
 node tests/frontend-modules.test.mjs
 ```
 
-验证内容：
+The tests cover:
 
-- `api.js` 的 POST、GET、DELETE 请求结构
-- Backend 错误消息透传
-- 网络异常转换为“无法连接后端服务”
-- 快速重复点击等号只产生一个计算请求
-- 成功计算后只刷新一次 History
-- 删除后只重新加载一次 History
-- Local/Production API URL 选择与 Production HTTPS 约束
-- Calculation POST loading 与 History GET loading 解耦
-- 慢 History、History 失败、POST 失败和连续计算状态
+- local and production API URL selection
+- API error normalization
+- calculation request behavior
+- immediate result rendering before history refresh completes
+- history initialization deduplication
+- history request race handling
+- history deletion and refresh
 
-## 4. 浏览器端到端测试
+Expected result: **7 tests passed**.
 
-浏览器测试文件：`tests/browser-e2e.cjs`。它通过 Chrome DevTools Protocol 操作真实页面，并收集 Network 和 JavaScript Console 事件。
+## 2. Backend Prerequisite
 
-运行前需要：
+Browser tests require the separate backend repository.
 
-1. Backend 监听 `localhost:8000`。
-2. Frontend 静态服务器监听 `localhost:5500`。
-3. Edge 使用 `--remote-debugging-port=9222` 打开 Frontend 页面。
-
-然后运行：
+From `calculator-backend`:
 
 ```powershell
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn src.main:app --host 127.0.0.1 --port 8000
+```
+
+Verify:
+
+```text
+http://127.0.0.1:8000/health
+```
+
+Use an isolated test database when running scenarios that create or delete
+history. The backend creates missing tables automatically at startup.
+
+## 3. Browser Integration Test
+
+Start the frontend from `calculator-frontend`:
+
+```powershell
+python -m http.server 5500
+```
+
+Start Edge with remote debugging in a separate terminal. Use a temporary user
+data directory that is not shared with a normal browser session:
+
+```powershell
+msedge.exe --headless=new --disable-gpu --remote-debugging-port=9222 `
+  --user-data-dir="$env:TEMP\calculator-edge-e2e" `
+  http://localhost:5500/src/index.html
+```
+
+Then run:
+
+```bash
 node tests/browser-e2e.cjs
 ```
 
-该测试记录原有 History ID，并在结束时仅删除本次创建的记录，不删除已有开发数据。
+The verified scenario confirms:
 
-## 5. Network 验收结果
+| Check | Expected |
+| --- | --- |
+| Initial history requests | 1 |
+| Calculation POST requests | 1 |
+| History requests after calculation | 1 |
+| Delete requests | 1 |
+| History requests after deletion | 1 |
+| Initial history blocks keypad input | No |
+| Offline local fallback result appears | No |
+| UI remains interactive while offline | Yes |
+| Browser console errors | 0 |
 
-真实页面测试得到以下业务请求数量：
+This request-count validation protects against duplicate `GET /api/history`
+regressions and accidental form submission or page refresh behavior.
 
-| 用户动作 | POST calculate | GET history | DELETE history |
-|---|---:|---:|---:|
-| 页面首次加载 | 0 | 1 | 0 |
-| 计算 `55+6` | 1 | 1 | 0 |
-| 快速连续点击两次等号 | 1 | 1 | 0 |
-| 非法表达式 | 1 | 0 | 0 |
-| 删除一条记录 | 0 | 1 | 1 |
-| 刷新 Frontend | 0 | 1 | 0 |
+## 4. Manual Functional Matrix
 
-CORS 场景可能额外出现正常的 OPTIONS 预检；OPTIONS 不属于重复业务请求。
+Run each expression through the visible keypad. Confirm that the displayed
+result is returned by `POST /api/calculate`, not calculated in the browser.
 
-## 6. 测试矩阵
+| Scenario | Example | Expected result |
+| --- | --- | --- |
+| Addition | `1+2` | `3` |
+| Subtraction | `7-5` | `2` |
+| Multiplication | `6*4` | `24` |
+| Division | `8/2` | `4` |
+| Precedence | `2+3*4` | `14` |
+| Parentheses | `(2+3)*4` | `20` |
+| Decimal precision | `0.1+0.2` | `0.3` |
+| Unary negative | `-5+2` | `-3` |
+| Invalid expression | `1++` | An English error message |
+| Division by zero | `1/0` | An English error message |
 
-| Test Case | Input / Action | Expected | Actual | Status |
-|---|---|---|---|---|
-| Health | `GET /` | 200 + running message | 符合 | PASS |
-| Addition | `1+2` | 3 | 3 | PASS |
-| Subtraction | `5-3` | 2 | 2 | PASS |
-| Multiplication | `4*6` | 24 | 24 | PASS |
-| Division | `8/2` | 4 | 4 | PASS |
-| Precedence | `1+2*3` | 7 | 7 | PASS |
-| Parentheses | `(1+2)*3` | 9 | 9 | PASS |
-| Nested parentheses | `2*(3+(4*5))` | 46 | 46 | PASS |
-| Left associativity | `10-3-2`, `8/4/2` | 5, 1 | 5, 1 | PASS |
-| Decimal | `1.5+2.3`, `.5+1` | 3.8, 1.5 | 3.8, 1.5 | PASS |
-| Decimal precision | `2.3+5.6`, `0.1+0.2` | 7.9, 0.3 | 7.9, 0.3 | PASS |
-| Decimal operations | `1.2-1.1`, `0.1*0.2`, `0.3/0.1` | 0.1, 0.02, 3 | 符合 | PASS |
-| Unary signs | `-5+8`, `3*-2`, `3--2` | 3, -6, 5 | 3, -6, 5 | PASS |
-| Invalid input | `abc`, `1+*2`, `()` | HTTP 400 | HTTP 400 | PASS |
-| Division by zero | `10/0`, `1/(2-2)` | HTTP 400 | HTTP 400 | PASS |
-| Missing field | `{}` | HTTP 422 | HTTP 422 | PASS |
-| Empty expression | `{"expression":""}` | HTTP 400 | HTTP 400 | PASS |
-| Length limit | 201 characters | HTTP 400 | HTTP 400 | PASS |
-| Save History | Successful calculation | Database record | Record found | PASS |
-| Failed History | Invalid/zero division | No new record | Count unchanged | PASS |
-| History ordering | Multiple calculations | Newest first | ID descending | PASS |
-| Frontend refresh | Reload page | History remains | History rendered | PASS |
-| Backend restart | Stop and restart | History remains | Record remained | PASS |
-| Delete History | Delete existing ID | Record disappears | Record absent | PASS |
-| Delete missing | ID `999999999` | HTTP 404 | HTTP 404 | PASS |
-| Empty History | Isolated empty database | `[]` | `[]` | PASS |
-| CORS localhost | Origin `localhost:5500` | Allowed | Allowed | PASS |
-| CORS loopback | Origin `127.0.0.1:5500` | Allowed | Allowed | PASS |
-| Duplicate submit | Rapid `=` clicks | One POST | One POST | PASS |
-| Duplicate refresh | Successful calculate | One GET History | One GET | PASS |
-| Slow History | POST complete, GET delayed | Result/button ready first | 符合 | PASS |
-| History failure | Calculate succeeds, GET fails | Result remains successful | 符合 | PASS |
-| Delete refresh | Delete button | DELETE + one GET | 符合 | PASS |
-| Backend Offline | Calculate `1+2` offline | No result + error | No result | PASS |
-| Offline UI | Input and clear offline | Still interactive | Interactive | PASS |
-| Console | Normal/error flows | No JS exception | 0 errors | PASS |
-| HTML safety | History expression | `textContent` | `textContent` | PASS |
+Also verify:
 
-## 7. 持久化测试
+1. Pressing `AC` clears the expression and resets the result display.
+2. Repeated clicks on `=` while a request is pending create one POST request.
+3. The result appears without waiting for the history refresh to finish.
+4. A successful calculation appears once in the history panel.
+5. Reloading the page preserves server-backed history.
+6. Deleting a record removes only the selected record.
+7. Backend downtime shows an error and never triggers local calculation.
 
-测试流程：
+## 5. Responsive and Accessibility Checks
 
-1. 使用文件型 SQLite 数据库启动 Backend。
-2. 计算 `123+456`，确认 History 中存在结果 579。
-3. 停止并重新启动 Backend。
-4. 再次查询 History，原记录仍然存在。
-5. 刷新 Frontend，页面重新 GET 并显示同一记录。
+Test at minimum:
 
-结果：PASS。History 来自 SQLite，而不是 JavaScript 内存或浏览器存储。
+- Desktop: 1440 x 900
+- Mobile: 390 x 844
+- Small mobile: 320 x 568
 
-## 8. Backend Offline 测试
+Confirm that:
 
-浏览器通过 DevTools Protocol 模拟完全离线：
+- the desktop calculator and history sections form two columns
+- the sections stack vertically at 700 px or less
+- no controls overlap or leave the viewport horizontally
+- buttons remain keyboard accessible
+- focus indicators remain visible
+- expression, result, and history status changes are announced appropriately
+- all visible interface text is English
 
-- 输入 `1+2` 后无法获得 3。
-- 页面显示“无法连接后端服务”。
-- 数字、运算符和清除按钮继续工作。
-- 没有未处理 Promise rejection 或 JavaScript exception。
+## 6. Architecture and Static Checks
 
-结果：PASS。
+Search the frontend source before release:
 
-## 9. 静态安全与架构检查
+```powershell
+rg -n "eval\(|Function\(|localStorage|sessionStorage" src tests
+```
 
-- Frontend 中没有 `eval()`、`Function()` 或数学 Parser/Evaluator。
-- Frontend 中没有 LocalStorage、SessionStorage 或 IndexedDB History。
-- `fetch` 只出现在 `api.js`。
-- History 表达式通过 `textContent` 渲染。
-- Backend 源码没有写死 Windows 项目绝对路径。
-- `requirements.txt` 只包含项目运行和测试需要的依赖。
-- 两个项目均保留各自的 `codestyle.md` 和 Git 仓库。
+Expected result: no browser-side evaluator and no browser-backed history.
 
-## 10. 后续截图清单
+Review the Network panel and confirm that each user action produces only the
+intended request sequence. Review the Console panel and confirm that no runtime
+errors appear.
 
-建议为课程博客保留以下浏览器截图：
+## 7. Production Verification
 
-1. Calculator 主界面
-2. Addition
-3. Subtraction
-4. Multiplication
-5. Division
-6. Decimal
-7. Compound expression
-8. Parentheses
-9. Unary negative
-10. Invalid expression
-11. Division by zero
-12. History 列表
-13. 刷新后 History 持久化
-14. 删除 History
-15. DevTools Network 中的 POST + GET
-16. DevTools Network 中的 DELETE + GET
-17. Console 无 JavaScript 异常
+Production baseline verified on **2026-10-03**:
 
-## 11. 已知测试提示
+- GitHub Pages frontend returned successfully.
+- Backend root, health, and Swagger documentation returned successfully.
+- A production calculation/history/delete round trip succeeded.
+- The temporary production history record was deleted after testing.
+- Invalid expressions, division by zero, missing history records, validation
+  errors, and the configured CORS origin returned the expected status codes.
 
-当前 FastAPI/Starlette TestClient 会输出一条上游依赖弃用 warning，但不影响测试成功，也没有 failed 或 error。后续依赖升级阶段可统一处理，不需要在 Phase 7 改动业务代码。
+Release smoke test:
 
-## 12. Deployment readiness 验证
+1. Open <https://aurowisp.github.io/calculator-frontend/>.
+2. Confirm that the root redirects to the application page.
+3. Calculate a unique expression and inspect the result.
+4. Confirm that one matching history item appears.
+5. Delete that item and confirm that it stays deleted after reload.
+6. Check the browser Console and Network panels for errors or duplicate calls.
 
-- `DATABASE_URL` 未设置时使用项目根目录 SQLite。
-- `postgres://` 和 `postgresql://` 会转换为 `postgresql+psycopg://`。
-- SQLAlchemy 已验证加载 `psycopg` PostgreSQL dialect，未连接真实 Cloud Database。
-- `$PORT` 测试实例成功监听 `0.0.0.0:8010`，`GET /health` 返回 200。
-- 自定义 `https://example.github.io` CORS Origin 预检返回 200。
-- Repository 根 `index.html` 能跳转到相对路径 `./src/index.html`。
-- Production API placeholder 使用 HTTPS，且非本地 hostname 不会选择 localhost Backend。
-
-## 13. Decimal 与 Loading 回归
-
-- Parser 从原始 NUMBER token 直接构造 `Decimal`，不经过 `float`。
-- Evaluator 使用 precision 256 的局部 Decimal context，并只在 API 边界转换为 `int | float`。
-- `2.3+5.6 → 7.9` 和 `0.1+0.2 → 0.3` 的 API 与 History 结果均通过。
-- 浏览器 E2E 将 History 响应人为延迟 1.2 秒；Result 在 POST 完成后立即显示，等号恢复可用，History 保持独立 loading。
-- History 刷新失败不会覆盖已经成功显示的 Calculation Result。
-- Calculator 事件在页面初始化时立即绑定，不等待首次 History GET；Render cold start 期间仍可输入表达式并操作界面。
-
-## 14. Performance 检查
-
-2026-10-02 的一次诊断样本：
-
-- 本地 Parser/Evaluator：10,000 次约 181 ms，平均约 0.018 ms/次。
-- 本地 `POST /api/calculate`（含 SQLite commit/refresh）：平均约 15 ms。
-- Render 休眠后的首次只读 `/health`：约 44.2 秒。
-- 同一实例唤醒后的 `/health`：约 0.34–0.37 秒。
-- 热状态 `/api/history`：约 1.26 秒。
-
-耗时会随网络和托管平台状态变化；该样本表明秒级首次延迟主要来自 Render Free cold start，而不是表达式计算。项目没有添加定时 ping 或 keep-alive。Frontend 已确保首次 History 未返回时 Calculator 仍可输入，POST 返回结果后也不等待 History refresh。
+Allow extra time for a hosted backend cold start after inactivity.
