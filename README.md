@@ -133,6 +133,8 @@ Content-Type: application/json
 
 历史记录不使用 LocalStorage、SessionStorage、IndexedDB 或内存数组作为数据源。
 
+Calculator 交互初始化不等待首次 History 请求完成。Production Backend 从休眠状态启动时，用户仍可立即输入表达式；数学结果仍必须等待 Backend 完成计算和数据库持久化后返回，Frontend 不提供本地计算 fallback。
+
 ## GitHub Pages Deployment
 
 Repository 根目录的 `index.html` 会使用相对路径跳转到 `./src/index.html`，因此项目站点根地址可以直接进入计算器：

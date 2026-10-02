@@ -22,18 +22,18 @@ const calculatorController = new CalculatorController({
 
 let isInitialized = false;
 
-async function initializeApp() {
+function initializeApp() {
   if (isInitialized) {
     return;
   }
 
   isInitialized = true;
-  await historyController.initialize();
   calculatorController.initialize();
+  void historyController.initialize();
 }
 
 function startApp() {
-  void initializeApp();
+  initializeApp();
 }
 
 if (document.readyState === 'loading') {

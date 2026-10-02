@@ -32,6 +32,7 @@ function createCdpClient(socket) {
   const pending = new Map();
   const requests = [];
   const consoleErrors = [];
+  const pausedRequests = [];
 
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(event.data);
@@ -53,6 +54,10 @@ function createCdpClient(socket) {
         method: message.params.request.method,
         url: message.params.request.url,
       });
+    }
+
+    if (message.method === 'Fetch.requestPaused') {
+      pausedRequests.push(message.params);
     }
 
     if (message.method === 'Runtime.exceptionThrown') {
@@ -99,7 +104,14 @@ function createCdpClient(socket) {
     throw new Error(`Timed out waiting for ${label}`);
   }
 
-  return {consoleErrors, evaluate, requests, send, waitFor};
+  return {
+    consoleErrors,
+    evaluate,
+    pausedRequests,
+    requests,
+    send,
+    waitFor,
+  };
 }
 
 
@@ -169,9 +181,51 @@ async function run() {
     await client.send('Runtime.enable');
     await client.send('Network.enable');
     await client.send('Page.enable');
+    await client.send('Fetch.enable', {
+      patterns: [
+        {
+          requestStage: 'Request',
+          urlPattern: `${BACKEND_URL}/api/history`,
+        },
+      ],
+    });
 
     client.requests.length = 0;
     await client.send('Page.reload', {ignoreCache: true});
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      if (client.pausedRequests.length > 0) {
+        break;
+      }
+      await sleep(100);
+    }
+    assert.equal(
+      client.pausedRequests.length,
+      1,
+      'Initial History request should be paused for startup testing',
+    );
+    await client.waitFor(
+      `document.readyState === 'complete'`,
+      'document load while initial history is pending',
+    );
+    await client.evaluate(`(() => {
+      document.querySelector('[data-value="1"]').click();
+      document.querySelector('[data-value="+"]').click();
+      document.querySelector('[data-value="2"]').click();
+    })()`);
+    assert.equal(
+      await client.evaluate(
+        `document.querySelector('#expression-display').textContent`,
+      ),
+      '1+2',
+      'Calculator input should not wait for initial History',
+    );
+    await client.evaluate(
+      `document.querySelector('[data-action="clear"]').click()`,
+    );
+    await client.send('Fetch.continueRequest', {
+      requestId: client.pausedRequests[0].requestId,
+    });
+    await client.send('Fetch.disable');
     await client.waitFor(
       `document.readyState === 'complete'
         && !document.querySelector('.history__empty')
@@ -446,6 +500,7 @@ async function run() {
       deleteHistoryGet: 1,
       deleteRequest: 1,
       initialHistoryGet: 1,
+      initialHistoryNonBlocking: true,
       offlineFallbackResult: false,
       offlineUiInteractive: true,
     };

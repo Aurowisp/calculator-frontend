@@ -215,3 +215,16 @@ CORS 场景可能额外出现正常的 OPTIONS 预检；OPTIONS 不属于重复�
 - `2.3+5.6 → 7.9` 和 `0.1+0.2 → 0.3` 的 API 与 History 结果均通过。
 - 浏览器 E2E 将 History 响应人为延迟 1.2 秒；Result 在 POST 完成后立即显示，等号恢复可用，History 保持独立 loading。
 - History 刷新失败不会覆盖已经成功显示的 Calculation Result。
+- Calculator 事件在页面初始化时立即绑定，不等待首次 History GET；Render cold start 期间仍可输入表达式并操作界面。
+
+## 14. Performance 检查
+
+2026-10-02 的一次诊断样本：
+
+- 本地 Parser/Evaluator：10,000 次约 181 ms，平均约 0.018 ms/次。
+- 本地 `POST /api/calculate`（含 SQLite commit/refresh）：平均约 15 ms。
+- Render 休眠后的首次只读 `/health`：约 44.2 秒。
+- 同一实例唤醒后的 `/health`：约 0.34–0.37 秒。
+- 热状态 `/api/history`：约 1.26 秒。
+
+耗时会随网络和托管平台状态变化；该样本表明秒级首次延迟主要来自 Render Free cold start，而不是表达式计算。项目没有添加定时 ping 或 keep-alive。Frontend 已确保首次 History 未返回时 Calculator 仍可输入，POST 返回结果后也不等待 History refresh。
